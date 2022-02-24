@@ -125,9 +125,27 @@ void FFDecoder::Release() {
     delete m_pUrl;
     m_pUrl = nullptr;
     m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
-    avformat_free_context(m_pFtmCtx);
-    m_pFtmCtx = nullptr;
+    if (m_pFtmCtx != nullptr) {
+        avformat_free_context(m_pFtmCtx);
+        m_pFtmCtx = nullptr;
+    }
     m_streamIndex = 0;
-    delete m_pAVCodec;
-    m_pAVCodec = nullptr;
+    if (m_pAVCodecContext != nullptr) {
+        avcodec_close(m_pAVCodecContext);
+        avcodec_free_context(&m_pAVCodecContext);
+        delete m_pAVCodecContext;
+        m_pAVCodecContext = nullptr;
+        delete m_pAVCodec;
+        m_pAVCodec = nullptr;
+    }
+    if (m_pAVPack != nullptr) {
+        av_packet_free(&m_pAVPack);
+        delete m_pAVPack;
+        m_pAVPack = nullptr;
+    }
+    if (m_pAVFrame != nullptr) {
+        av_frame_free(&m_pAVFrame);
+        delete m_pAVFrame;
+        m_pAVFrame = nullptr;
+    }
 }
