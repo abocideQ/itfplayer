@@ -1,0 +1,6 @@
+#ifndef ITFPLAYER_LOGIOS_H
+#define ITFPLAYER_LOGIOS_H
+
+#define LOG_TAG "IOS_LOG_"
+
+#endif //ITFPLAYER_LOGIOS_H

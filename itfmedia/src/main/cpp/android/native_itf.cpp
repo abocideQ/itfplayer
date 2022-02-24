@@ -1,10 +1,8 @@
 #include <jni.h>
-#include "itfcodec/ItfAndroidCodec.h"
 
 extern "C" {
 void native_itf_source(JNIEnv *env, jobject *obj, jstring url) {
     char *p = (char *) env->GetStringUTFChars(url, 0);
-    ItfAndroidCodec::instance()->Init(p);
 }
 
 //jni auto register

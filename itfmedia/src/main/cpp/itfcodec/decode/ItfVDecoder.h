@@ -1,8 +1,7 @@
-#ifndef ITFPLAYER_BASEVDECODE_H
-#define ITFPLAYER_BASEVDECODE_H
+#ifndef ITFPLAYER_ITFVDECODER_H
+#define ITFPLAYER_ITFVDECODER_H
 
-#include <thread>
-#include <mutex>
+#include "FFDecoder.h"
 
 //当前解码状态
 enum CodecState {
@@ -22,9 +21,9 @@ enum CodecRequest {
     REQUEST_STOP
 };
 
-class BaseVDecode {
+class ItfVDecoder {
 public:
-    virtual void Source(char *url);
+    virtual void Source(char *pUrl);
 
     void Resume();
 
@@ -34,14 +33,13 @@ public:
 
     int State();
 
-
 protected:
+    //解码器运行时
     void Looping();
 
-    virtual int Encode() = 0;//纯虚解码 -2.unknown -1.end 0.continue
+    int Encode();
 
-    //地址
-    char *m_pUrl = nullptr;
+private:
     //当前请求操作
     volatile CodecRequest m_request;
     //当前状态
@@ -49,10 +47,9 @@ protected:
     //自动开始
     volatile bool m_auto = true;
     //请求锁,保证状态变换顺序
-    std::mutex m_pMutex;
+    std::mutex m_mutex;
     //循环锁,保证只存在单次循环
-    std::mutex m_pLoopMutex;
-    std::thread loopThread;
+    std::mutex m_loopMutex;
 };
 
-#endif //ITFPLAYER_BASEVDECODE_H
+#endif //ITFPLAYER_ITFVDECODER_H

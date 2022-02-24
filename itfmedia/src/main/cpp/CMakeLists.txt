@@ -32,14 +32,14 @@ file(GLOB lib_cpp
         android_opengles/include/*.cpp
         android_opengles/include/glm/*.cpp
         android_opengles/render/*.cpp
-        android_opengles/render_egl/*.cpp
+        android_opengles/egl/*.cpp
         #opensl
         android_opensles/include/*.cpp
         android_opensles/render/*.cpp
         #itf
         itfcodec/*.cpp
         itfcodec/decode/*.cpp
-        itfcodec/encode/*.cpp
+        itfcodec/decode/*.cpp
         itfcodec/utils/*.cpp
         )
 

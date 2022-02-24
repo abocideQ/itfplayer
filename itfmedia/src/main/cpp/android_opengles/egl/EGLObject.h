@@ -1,8 +1,7 @@
 #ifndef ITFPLAYER_EGLOBJECT_H
 #define ITFPLAYER_EGLOBJECT_H
 
-#include <EGL/egl.h>
-#include <GLES3/gl3.h>
+#include "utils/header_opengl.h"
 
 class EGLObject {
 public:
@@ -25,7 +24,7 @@ private:
     EGLint *m_minorVersion;
     //surface 配置
     const EGLint m_configsMax = 10;
-    EGLConfig m_configs[m_configsMax]
+    EGLConfig m_configs[10];
     EGLint *m_configsNum;
     //surface
     EGLSurface *m_eglSurface;

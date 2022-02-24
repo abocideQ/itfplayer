@@ -13,7 +13,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         requestPermissions(mPermissions, 100)
         CAO.copyAssetsDirToSDCard(this, "video", this.obbDir.absolutePath)
-        NativeItfMedia().init(this.obbDir.absolutePath + "/" + "video/one_piece.mp4")
+//        NativeItfMedia().init(this.obbDir.absolutePath + "/" + "video/one_piece.mp4")
 
     }
 

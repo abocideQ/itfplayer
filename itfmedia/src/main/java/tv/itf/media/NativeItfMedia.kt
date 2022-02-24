@@ -6,9 +6,9 @@ class NativeItfMedia {
         System.loadLibrary("lib_itfmedia")
     }
 
-    fun source(url: String) {
-        native_itf_source(url)
-    }
+//    fun source(url: String) {
+//        native_itf_source(url)
+//    }
 
-    private external fun native_itf_source(url: String)
+//    private external fun native_itf_source(url: String)
 }

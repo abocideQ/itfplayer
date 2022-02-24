@@ -1,40 +1,39 @@
-#include "BaseVDecode.h"
-#include "utils/LogAndroid.h"
+#include "ItfVDecoder.h"
 
 extern "C" {
-void BaseVDecode::Source(char *url) {
-    if (m_pUrl != nullptr){
-        Stop();
-    }
-    std::lock_guard<std::mutex> lock_request_state(m_pMutex);
-    m_pUrl = url;
-    loopThread = std::thread(&BaseVDecode::Looping, this);
+void ItfVDecoder::Source(char *pUrl) {
+//    if (m_pUrl != nullptr) {
+//        Stop();
+//    }
+//    std::lock_guard<std::mutex> lock_request_state(m_mutex);
+//    m_pUrl = url;
+//    std::thread(&ItfVDecoder::Looping, this);
 }
 
-void BaseVDecode::Resume() {
-    std::lock_guard<std::mutex> request_state_lock(m_pMutex);
+void ItfVDecoder::Resume() {
+    std::lock_guard<std::mutex> request_state_lock(m_mutex);
     if (m_state == STATE_STOP || m_state == STATE_UNKNOWN) {
         return;
     }
     m_request = REQUEST_RESUME;
 }
 
-void BaseVDecode::Pause() {
-    std::lock_guard<std::mutex> lock_request_state(m_pMutex);
+void ItfVDecoder::Pause() {
+    std::lock_guard<std::mutex> lock_request_state(m_mutex);
     m_request = REQUEST_PAUSE;
 }
 
-void BaseVDecode::Stop() {
-    std::lock_guard<std::mutex> lock_request_state(m_pMutex);
+void ItfVDecoder::Stop() {
+    std::lock_guard<std::mutex> lock_request_state(m_mutex);
     m_request = REQUEST_STOP;
 }
 
-void BaseVDecode::Looping() {
-    std::unique_lock<std::mutex> lock_loop(m_pLoopMutex);
+void ItfVDecoder::Looping() {
+    std::unique_lock<std::mutex> lock_loop(m_loopMutex);
     m_state = STATE_READY;
     //codec looping
     for (;;) {
-        std::unique_lock<std::mutex> lock_request_state(m_pMutex);
+        std::unique_lock<std::mutex> lock_request_state(m_mutex);
         if (m_request == REQUEST_RESUME) {//请求继续
             m_request = REQUEST_NULL;
             m_state = STATE_RESUME;
@@ -75,7 +74,7 @@ void BaseVDecode::Looping() {
     lock_loop.unlock();
 }
 
-int BaseVDecode::State() {
+int ItfVDecoder::State() {
     if (m_state == STATE_UNKNOWN) {
         return -1;
     } else if (m_state == STATE_READY) {
@@ -90,4 +89,8 @@ int BaseVDecode::State() {
         return -2;
     }
 }
+}
+
+int ItfVDecoder::Encode() {
+    return 0;
 }
