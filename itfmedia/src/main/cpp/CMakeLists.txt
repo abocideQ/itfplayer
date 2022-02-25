@@ -17,9 +17,6 @@ include_directories(
         ${CMAKE_HOME_DIRECTORY}/android_opensles/render
         #itf
         ${CMAKE_HOME_DIRECTORY}/itfcodec
-        ${CMAKE_HOME_DIRECTORY}/itfcodec/decode
-        ${CMAKE_HOME_DIRECTORY}/itfcodec/encode
-        ${CMAKE_HOME_DIRECTORY}/itfcodec/utils
 )
 
 # ???.cpp
@@ -38,9 +35,6 @@ file(GLOB lib_cpp
         android_opensles/render/*.cpp
         #itf
         itfcodec/*.cpp
-        itfcodec/decode/*.cpp
-        itfcodec/decode/*.cpp
-        itfcodec/utils/*.cpp
         )
 
 # ???.so

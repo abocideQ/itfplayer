@@ -1,45 +1,45 @@
-#include "ItfVDecoder.h"
+#include "ItfDecoder.h"
 
 extern "C" {
-void ItfVDecoder::Source(char *pUrl) {
-    if (m_pVDecoder == nullptr) {
-        m_pVDecoder = new FFDecoder();
+void ItfDecoder::Source(char *pUrl) {
+    if (m_pFFDecoder == nullptr) {
+        m_pFFDecoder = new FFDecoder();
     }
-    if (m_pVDecoder->Source() != nullptr) {
+    if (m_pFFDecoder->Source() != nullptr) {
         Stop();
     }
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
-    m_pVDecoder->SourceVideo(pUrl);
-    std::thread(&ItfVDecoder::Looping, this);
+    m_pFFDecoder->SourceVideo(pUrl);
+    std::thread(&ItfDecoder::Looping, this);
 }
 
-void ItfVDecoder::Resume() {
-    std::lock_guard<std::mutex> request_state_lock(m_stateMutex);
+void ItfDecoder::Resume() {
+    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     if (m_state == STATE_STOP || m_state == STATE_UNKNOWN) {
         return;
     }
     m_request = REQUEST_RESUME;
 }
 
-void ItfVDecoder::Pause() {
+void ItfDecoder::Pause() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     m_request = REQUEST_PAUSE;
 }
 
-void ItfVDecoder::Stop() {
+void ItfDecoder::Stop() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     m_request = REQUEST_STOP;
 }
 
-void ItfVDecoder::Release() {
+void ItfDecoder::Release() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     m_request = REQUEST_STOP;
-    m_pVDecoder->Release();
-    delete m_pVDecoder;
-    m_pVDecoder = nullptr;
+    m_pFFDecoder->Release();
+    delete m_pFFDecoder;
+    m_pFFDecoder = nullptr;
 }
 
-void ItfVDecoder::Looping() {
+void ItfDecoder::Looping() {
     std::lock_guard<std::mutex> lock_loop(m_loopMutex);
     m_state = STATE_READY;
     //codec looping
@@ -72,7 +72,7 @@ void ItfVDecoder::Looping() {
             lock_request_state.unlock();
             continue;
         } else if (m_state == STATE_RESUME) {//继续
-            int ret_ = m_pVDecoder->Decode();
+            int ret_ = m_pFFDecoder->Decode();
             if (ret_ == -1) {//解码停止
                 m_state = STATE_STOP;
             } else if (ret_ == 1) {//解码完成
@@ -81,7 +81,6 @@ void ItfVDecoder::Looping() {
             lock_request_state.unlock();
             continue;
         } else if (m_state == STATE_PAUSE) {//暂停
-            m_state = STATE_PAUSE;
             lock_request_state.unlock();
             continue;
         } else if (m_state == STATE_STOP) {//停止
@@ -94,7 +93,7 @@ void ItfVDecoder::Looping() {
     }
 }
 
-int ItfVDecoder::State() {
+int ItfDecoder::State() {
     if (m_state == STATE_UNKNOWN) {
         return -1;
     } else if (m_state == STATE_READY) {

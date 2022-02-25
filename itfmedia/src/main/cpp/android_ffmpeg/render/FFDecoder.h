@@ -11,14 +11,10 @@ public:
 
     void SourceAudio(char *pUrl);
 
-    //返回链接
     char *Source();
 
     //解码
     int Decode();
-
-    //解码后数据
-    AVFrame *DecodeRet();
 
     //销毁
     void Release();
@@ -29,6 +25,12 @@ public:
 protected:
     //解码器初始化
     int DecoderInitial();
+
+    void SwsScale();
+
+    void SwrConvert();
+
+    void Synchronization();
 
 private:
     //媒体地址
@@ -47,6 +49,11 @@ private:
     AVPacket *m_pAvPack = nullptr;
     //解码数据结构体
     AVFrame *m_pAvFrame = nullptr;
+    //图像转换工具
+    SwsContext *m_pSwsCtx = nullptr;
+    //音频采样工具
+    //同步锁
+    std::mutex m_synMutex;
 };
 
 #endif //ITFPLAYER_FFDECODER_H

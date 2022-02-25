@@ -21,82 +21,58 @@ int FFDecoder::Decode() {
     int ret_;
     /* *
      * 1.读取编码数据包
+     * AVPack 对应 1个NALU 对应 1个或多个frames
+     * PTS:渲染时间戳
+     * DTS:解码时间戳
      * */
     ret_ = av_read_frame(m_pAvFtmCtx, m_pAvPack);
-    if (ret_ < 0) {
-        return -1;
-    }
-    if (m_pAvPack->stream_index != m_avStreamIndex) {
+    if (ret_ < 0 || m_pAvPack->stream_index != m_avStreamIndex) {
+        av_packet_unref(m_pAvPack);
+        LOGCAT("FFDecoder::Decode av_read_frame err -1");
         return -1;
     }
     /* *
      * 2.发送到解码队列
      * */
     ret_ = avcodec_send_packet(m_pAvCodecContext, m_pAvPack);
-    if (ret_ != 0) {
-        return -1;
+    if (ret_ == AVERROR_EOF) {//end of file 解码结束
+        av_packet_unref(m_pAvPack);
+        LOGCAT("FFDecoder::Decode avcodec_send_packet end");
+        return 1;
     }
     /* *
      * 3.接收解码数据
      * */
-    ret_ = avcodec_receive_frame(m_pAvCodecContext, m_pAvFrame);
-    if (ret_ != 0) {
-        return -1;
+    int nb_frame = 0;
+    while (avcodec_receive_frame(m_pAvCodecContext, m_pAvFrame) == 0) {
+        {//音频/视频数据处理
+            if (m_avMediaType == AVMEDIA_TYPE_VIDEO) {
+                SwsScale();
+            } else if (m_avMediaType == AVMEDIA_TYPE_AUDIO) {
+                SwrConvert();
+            }
+        }
+        {//时间同步
+            Synchronization();
+        }
+        nb_frame++;
     }
-    av_packet_unref(m_pAvPack);
+    if (nb_frame > 0) {
+        av_packet_unref(m_pAvPack);
+    }
     return 0;
 }
 
-AVFrame *FFDecoder::DecodeRet() {
-    return m_pAvFrame;
+void FFDecoder::SwsScale() {
+
 }
 
-int FFDecoder::MediaInfoDump(char *pUrl) {
-    AVFormatContext *ftmCtx = avformat_alloc_context();
-    int ret_;
-    ret_ = avformat_open_input(&ftmCtx, pUrl, nullptr, nullptr);
-    if (ret_ < 0) {
-        LOGCAT("FFDecoder::MediaInfoDump -1");
-        return -1;
-    }
-    ret_ = avformat_find_stream_info(ftmCtx, nullptr);
-    if (ret_ < 0) {
-        LOGCAT("FFDecoder::MediaInfoDump -2");
-        return -2;
-    }
-    //AVFormatContext, 流索引(一般为0), url, 打印 输入/输出流(1:输出0:输入)
-    //av_dump_format(m_pAvFtmCtx, 0, pUrl, 0);
-    avformat_close_input(&ftmCtx);
-    return 0;
+void FFDecoder::SwrConvert() {
+
 }
 
-void FFDecoder::Release() {
-    delete m_pUrl;
-    m_pUrl = nullptr;
-    m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
-    if (m_pAvFtmCtx != nullptr) {
-        avformat_free_context(m_pAvFtmCtx);
-        m_pAvFtmCtx = nullptr;
-    }
-    m_avStreamIndex = 0;
-    if (m_pAvCodecContext != nullptr) {
-        avcodec_close(m_pAvCodecContext);
-        avcodec_free_context(&m_pAvCodecContext);
-        delete m_pAvCodecContext;
-        m_pAvCodecContext = nullptr;
-        delete m_pAvCodec;
-        m_pAvCodec = nullptr;
-    }
-    if (m_pAvPack != nullptr) {
-        av_packet_free(&m_pAvPack);
-        delete m_pAvPack;
-        m_pAvPack = nullptr;
-    }
-    if (m_pAvFrame != nullptr) {
-        av_frame_free(&m_pAvFrame);
-        delete m_pAvFrame;
-        m_pAvFrame = nullptr;
-    }
+void FFDecoder::Synchronization() {
+    std::lock_guard<std::mutex> lock_syn(m_synMutex);
 }
 
 int FFDecoder::DecoderInitial() {
@@ -175,5 +151,53 @@ int FFDecoder::DecoderInitial() {
      * */
     m_pAvPack = av_packet_alloc();//创建 AVPacket 存放编码数据
     m_pAvFrame = av_frame_alloc();//创建 AVFrame 存放解码后的数据
+    return 0;
+}
+
+void FFDecoder::Release() {
+    delete m_pUrl;
+    m_pUrl = nullptr;
+    m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
+    if (m_pAvFtmCtx != nullptr) {
+        avformat_free_context(m_pAvFtmCtx);
+        m_pAvFtmCtx = nullptr;
+    }
+    m_avStreamIndex = 0;
+    if (m_pAvCodecContext != nullptr) {
+        avcodec_close(m_pAvCodecContext);
+        avcodec_free_context(&m_pAvCodecContext);
+        delete m_pAvCodecContext;
+        m_pAvCodecContext = nullptr;
+        delete m_pAvCodec;
+        m_pAvCodec = nullptr;
+    }
+    if (m_pAvPack != nullptr) {
+        av_packet_free(&m_pAvPack);
+        delete m_pAvPack;
+        m_pAvPack = nullptr;
+    }
+    if (m_pAvFrame != nullptr) {
+        av_frame_free(&m_pAvFrame);
+        delete m_pAvFrame;
+        m_pAvFrame = nullptr;
+    }
+}
+
+int FFDecoder::MediaInfoDump(char *pUrl) {
+    AVFormatContext *ftmCtx = avformat_alloc_context();
+    int ret_;
+    ret_ = avformat_open_input(&ftmCtx, pUrl, nullptr, nullptr);
+    if (ret_ < 0) {
+        LOGCAT("FFDecoder::MediaInfoDump -1");
+        return -1;
+    }
+    ret_ = avformat_find_stream_info(ftmCtx, nullptr);
+    if (ret_ < 0) {
+        LOGCAT("FFDecoder::MediaInfoDump -2");
+        return -2;
+    }
+    //AVFormatContext, 流索引(一般为0), url, 打印 输入/输出流(1:输出0:输入)
+    //av_dump_format(m_pAvFtmCtx, 0, pUrl, 0);
+    avformat_close_input(&ftmCtx);
     return 0;
 }

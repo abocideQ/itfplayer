@@ -1,5 +1,5 @@
-#ifndef ITFPLAYER_ITFVDECODER_H
-#define ITFPLAYER_ITFVDECODER_H
+#ifndef ITFPLAYER_ITFDECODER_H
+#define ITFPLAYER_ITFDECODER_H
 
 #include "FFDecoder.h"
 
@@ -21,9 +21,9 @@ enum CodecRequest {
     REQUEST_STOP
 };
 
-class ItfVDecoder {
+class ItfDecoder {
 public:
-    virtual void Source(char *pUrl);
+    void Source(char *pUrl);
 
     void Resume();
 
@@ -52,7 +52,7 @@ private:
     std::mutex m_loopMutex;
 
     //ffDecoder
-    FFDecoder *m_pVDecoder;
+    FFDecoder *m_pFFDecoder;
 };
 
-#endif //ITFPLAYER_ITFVDECODER_H
+#endif //ITFPLAYER_ITFDECODER_H
