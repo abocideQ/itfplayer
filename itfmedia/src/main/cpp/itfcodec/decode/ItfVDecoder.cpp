@@ -2,16 +2,19 @@
 
 extern "C" {
 void ItfVDecoder::Source(char *pUrl) {
-//    if (m_pUrl != nullptr) {
-//        Stop();
-//    }
-//    std::lock_guard<std::mutex> lock_request_state(m_mutex);
-//    m_pUrl = url;
-//    std::thread(&ItfVDecoder::Looping, this);
+    if (m_pVDecoder == nullptr) {
+        m_pVDecoder = new FFDecoder();
+    }
+    if (m_pVDecoder->Source() != nullptr) {
+        Stop();
+    }
+    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    m_pVDecoder->SourceVideo(pUrl);
+    std::thread(&ItfVDecoder::Looping, this);
 }
 
 void ItfVDecoder::Resume() {
-    std::lock_guard<std::mutex> request_state_lock(m_mutex);
+    std::lock_guard<std::mutex> request_state_lock(m_stateMutex);
     if (m_state == STATE_STOP || m_state == STATE_UNKNOWN) {
         return;
     }
@@ -19,59 +22,76 @@ void ItfVDecoder::Resume() {
 }
 
 void ItfVDecoder::Pause() {
-    std::lock_guard<std::mutex> lock_request_state(m_mutex);
+    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     m_request = REQUEST_PAUSE;
 }
 
 void ItfVDecoder::Stop() {
-    std::lock_guard<std::mutex> lock_request_state(m_mutex);
+    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     m_request = REQUEST_STOP;
 }
 
+void ItfVDecoder::Release() {
+    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    m_request = REQUEST_STOP;
+    m_pVDecoder->Release();
+    delete m_pVDecoder;
+    m_pVDecoder = nullptr;
+}
+
 void ItfVDecoder::Looping() {
-    std::unique_lock<std::mutex> lock_loop(m_loopMutex);
+    std::lock_guard<std::mutex> lock_loop(m_loopMutex);
     m_state = STATE_READY;
     //codec looping
     for (;;) {
-        std::unique_lock<std::mutex> lock_request_state(m_mutex);
-        if (m_request == REQUEST_RESUME) {//请求继续
+        std::unique_lock<std::mutex> lock_request_state(m_stateMutex);
+        //请求
+        if (m_request == REQUEST_RESUME) {//继续
             m_request = REQUEST_NULL;
             m_state = STATE_RESUME;
             lock_request_state.unlock();
-        } else if (m_request == REQUEST_PAUSE) {//请求暂停
+            continue;
+        } else if (m_request == REQUEST_PAUSE) {//暂停
             m_request = REQUEST_NULL;
             m_state = STATE_PAUSE;
             lock_request_state.unlock();
             continue;
-        } else if (m_request == REQUEST_STOP) {//请求停止
+        } else if (m_request == REQUEST_STOP) {//停止
             m_request = REQUEST_NULL;
             m_state = STATE_STOP;
             lock_request_state.unlock();
             return;
-        } else if (m_state == STATE_PAUSE) {//暂停状态
-            m_request = REQUEST_NULL;
-            lock_request_state.unlock();
-            continue;
-        } else if (m_state == STATE_READY) {//就绪状态
+        }
+        //状态
+        if (m_state == STATE_READY) {//就绪
             if (m_auto) {
-                m_request = REQUEST_NULL;
                 m_state = STATE_RESUME;
+            } else {
+                m_state = STATE_PAUSE;
             }
             lock_request_state.unlock();
             continue;
-        }
-        int encode = Encode();
-        if (encode == -2) {//解码停止
-            m_state = STATE_STOP;
-            return;
-        } else if (encode == -1) {//解码结束
-            m_state = STATE_COMPLETE;
-            return;
-        } else if (encode == 0) {//解码成功
+        } else if (m_state == STATE_RESUME) {//继续
+            int ret_ = m_pVDecoder->Decode();
+            if (ret_ == -1) {//解码停止
+                m_state = STATE_STOP;
+            } else if (ret_ == 1) {//解码完成
+                m_state = STATE_COMPLETE;
+            }
+            lock_request_state.unlock();
             continue;
+        } else if (m_state == STATE_PAUSE) {//暂停
+            m_state = STATE_PAUSE;
+            lock_request_state.unlock();
+            continue;
+        } else if (m_state == STATE_STOP) {//停止
+            return;
+        } else if (m_state == STATE_COMPLETE) {//完成
+            return;
+        } else if (m_state == STATE_UNKNOWN) {//未知
+            return;
         }
     }
-    lock_loop.unlock();
 }
 
 int ItfVDecoder::State() {
@@ -89,8 +109,4 @@ int ItfVDecoder::State() {
         return -2;
     }
 }
-}
-
-int ItfVDecoder::Encode() {
-    return 0;
 }

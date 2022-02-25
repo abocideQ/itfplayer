@@ -31,25 +31,28 @@ public:
 
     void Stop();
 
+    void Release();
+
     int State();
 
 protected:
     //解码器运行时
     void Looping();
 
-    int Encode();
-
 private:
+    //自动开始
+    volatile bool m_auto = true;
     //当前请求操作
     volatile CodecRequest m_request;
     //当前状态
     volatile CodecState m_state;
-    //自动开始
-    volatile bool m_auto = true;
     //请求锁,保证状态变换顺序
-    std::mutex m_mutex;
+    std::mutex m_stateMutex;
     //循环锁,保证只存在单次循环
     std::mutex m_loopMutex;
+
+    //ffDecoder
+    FFDecoder *m_pVDecoder;
 };
 
 #endif //ITFPLAYER_ITFVDECODER_H

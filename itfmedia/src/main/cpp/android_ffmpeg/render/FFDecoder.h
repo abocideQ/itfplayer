@@ -6,18 +6,29 @@
 
 class FFDecoder {
 public:
-    //初始化
-    void Source(char *pUrl, AVMediaType avMediaType);
+    //资源
+    void SourceVideo(char *pUrl);
 
-    //媒体信息
-    int MediaInfoDump();
+    void SourceAudio(char *pUrl);
+
+    //返回链接
+    char *Source();
+
+    //解码
+    int Decode();
+
+    //解码后数据
+    AVFrame *DecodeRet();
 
     //销毁
     void Release();
 
+    //打印媒体信息
+    int MediaInfoDump(char *pUrl);
+
 protected:
-    //初始化解码器
-    int DecoderInit();
+    //解码器初始化
+    int DecoderInitial();
 
 private:
     //媒体地址
@@ -25,17 +36,17 @@ private:
     //媒体类型
     AVMediaType m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
     //AVFormatContext 上下文
-    AVFormatContext *m_pFtmCtx = nullptr;
+    AVFormatContext *m_pAvFtmCtx = nullptr;
     //音视频流索引
-    int m_streamIndex = 0;
+    int m_avStreamIndex = 0;
     //解码器
-    AVCodec *m_pAVCodec = nullptr;
+    AVCodec *m_pAvCodec = nullptr;
     //解码器上下文
-    AVCodecContext *m_pAVCodecContext = nullptr;
-    //编码数据包
-    AVPacket *m_pAVPack = nullptr;
-    //解码数据包
-    AVFrame *m_pAVFrame = nullptr;
+    AVCodecContext *m_pAvCodecContext = nullptr;
+    //编码数据结构体
+    AVPacket *m_pAvPack = nullptr;
+    //解码数据结构体
+    AVFrame *m_pAvFrame = nullptr;
 };
 
 #endif //ITFPLAYER_FFDECODER_H
