@@ -1,0 +1,55 @@
+#ifndef ITFPLAYER_FFDECODERCORE_H
+#define ITFPLAYER_FFDECODERCORE_H
+
+#include "utils/header_common.h"
+#include "utils/header_ffmpeg.h"
+
+class FFDecoderCore {
+public:
+    //媒体信息
+    int FFInfoDump(char *pUrl);
+
+protected:
+    //初始化
+    int FFOpen(char *pUrl, AVMediaType avMediaType);
+
+    //解码
+    int FFDecoder();
+
+    //解码回调
+    virtual void FFDecoderRet() = 0;
+
+    //销毁
+    void FFClose();
+
+private:
+    void SwsScale();
+
+    void SwrConvert();
+
+    void Synchronization();
+
+    //媒体地址
+    char *m_pUrl = nullptr;
+    //媒体类型
+    AVMediaType m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
+    //AVFormatContext 上下文
+    AVFormatContext *m_pAvFtmCtx = nullptr;
+    //音视频流索引
+    int m_avStreamIndex = 0;
+    //解码器
+    AVCodec *m_pAvCodec = nullptr;
+    //解码器上下文
+    AVCodecContext *m_pAvCodecContext = nullptr;
+    //编码数据结构体
+    AVPacket *m_pAvPack = nullptr;
+    //解码数据结构体
+    AVFrame *m_pAvFrame = nullptr;
+    //图像转换工具
+    SwsContext *m_pSwsCtx = nullptr;
+    //音频采样工具
+    //同步锁
+    std::mutex m_synMutex;
+};
+
+#endif //ITFPLAYER_FFDECODERCORE_H
