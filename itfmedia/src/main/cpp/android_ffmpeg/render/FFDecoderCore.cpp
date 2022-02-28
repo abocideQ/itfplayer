@@ -57,8 +57,8 @@ int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     /* *
      * 6.创建解码器上下文
      * */
-    m_pAvCodecContext = avcodec_alloc_context3(m_pAvCodec);
-    ret_ = avcodec_parameters_to_context(m_pAvCodecContext, codecParameters);
+    m_pAvCodecCtx = avcodec_alloc_context3(m_pAvCodec);
+    ret_ = avcodec_parameters_to_context(m_pAvCodecCtx, codecParameters);
     if (ret_ != 0) {
         LOGCAT("FFDecoderCore::DecoderInit avcodec_parameters_to_context err");
         return -6;
@@ -66,7 +66,7 @@ int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     /* *
      * 7.打开解码器
      * */
-    ret_ = avcodec_open2(m_pAvCodecContext, m_pAvCodec, nullptr);
+    ret_ = avcodec_open2(m_pAvCodecCtx, m_pAvCodec, nullptr);
     if (ret_ < 0) {
         LOGCAT("FFDecoderCore::DecoderInit avcodec_open2 err: %d", ret_);
         return -7;
@@ -97,7 +97,7 @@ int FFDecoderCore::FFDecoder() {
     /* *
      * 2.发送到解码队列
      * */
-    ret_ = avcodec_send_packet(m_pAvCodecContext, m_pAvPack);
+    ret_ = avcodec_send_packet(m_pAvCodecCtx, m_pAvPack);
     if (ret_ == AVERROR_EOF) {//end of file 解码结束
         av_packet_unref(m_pAvPack);
         LOGCAT("FFDecoderCore::Decode avcodec_send_packet end");
@@ -107,15 +107,15 @@ int FFDecoderCore::FFDecoder() {
      * 3.接收解码数据
      * */
     int nb_frame = 0;
-    while (avcodec_receive_frame(m_pAvCodecContext, m_pAvFrame) == 0) {
+    while (avcodec_receive_frame(m_pAvCodecCtx, m_pAvFrame) == 0) {
         {//音频/视频数据处理
             if (m_avMediaType == AVMEDIA_TYPE_VIDEO) {
-                SwsScale();
+                SwsScale(m_pAvFrame);
             } else if (m_avMediaType == AVMEDIA_TYPE_AUDIO) {
-                SwrConvert();
+                SwrConvert(m_pAvFrame);
             }
         }
-        {//时间同步
+        {//时钟同步
             Synchronization();
         }
         nb_frame++;
@@ -126,32 +126,21 @@ int FFDecoderCore::FFDecoder() {
     return 0;
 }
 
-void FFDecoderCore::SwsScale() {
-    FFDecoderRet();
-}
-
-void FFDecoderCore::SwrConvert() {
-    FFDecoderRet();
-}
-
-void FFDecoderCore::Synchronization() {
-    std::lock_guard<std::mutex> lock_syn(m_synMutex);
-}
-
 void FFDecoderCore::FFClose() {
     delete m_pUrl;
     m_pUrl = nullptr;
     m_avMediaType = AVMEDIA_TYPE_UNKNOWN;
+    //codec
     if (m_pAvFtmCtx != nullptr) {
         avformat_free_context(m_pAvFtmCtx);
         m_pAvFtmCtx = nullptr;
     }
     m_avStreamIndex = 0;
-    if (m_pAvCodecContext != nullptr) {
-        avcodec_close(m_pAvCodecContext);
-        avcodec_free_context(&m_pAvCodecContext);
-        delete m_pAvCodecContext;
-        m_pAvCodecContext = nullptr;
+    if (m_pAvCodecCtx != nullptr) {
+        avcodec_close(m_pAvCodecCtx);
+        avcodec_free_context(&m_pAvCodecCtx);
+        delete m_pAvCodecCtx;
+        m_pAvCodecCtx = nullptr;
         delete m_pAvCodec;
         m_pAvCodec = nullptr;
     }
@@ -165,6 +154,15 @@ void FFDecoderCore::FFClose() {
         delete m_pAvFrame;
         m_pAvFrame = nullptr;
     }
+    //sws
+    if (m_pSwsCtx != nullptr) {
+        sws_freeContext(m_pSwsCtx);
+        m_pSwsCtx = nullptr;
+    }
+    pixel[0] = nullptr;
+    pixel[1] = nullptr;
+    pixel[2] = nullptr;
+    *pixel = nullptr;
 }
 
 int FFDecoderCore::FFInfoDump(char *pUrl) {
@@ -184,5 +182,116 @@ int FFDecoderCore::FFInfoDump(char *pUrl) {
     //av_dump_format(m_pAvFtmCtx, 0, pUrl, 0);
     avformat_close_input(&ftmCtx);
     return 0;
+}
+
+void FFDecoderCore::SwsScale(AVFrame *frame) {
+    int width = m_pAvCodecCtx->width;
+    int height = m_pAvCodecCtx->height;
+    if (m_pSwsCtx == nullptr) {
+        int align = 1;
+        /* *
+         * align: 内存对齐参数, 对齐是为了兼容硬件编解码
+         * 图片原数据: 3*10像素图片(rbg8bit模式 每像素3字节) -> 图片每行占9字节=3像素*3字节
+         * 若align=2: 每行应为2*5=10字节 -> ffmpeg在数据存储时每行尾部填充1字节
+         * 若align=1: 按实际的大小进行存储，不对齐,若解码时已经内存对齐则此处align=1无效
+         * linesize: 行字节数
+         * */
+        //转换后frame初始化
+        m_pSwsFrame = av_frame_alloc();
+        //内存分配
+        int frameSize = av_image_get_buffer_size(AV_PIX_FMT_NV21, width, height, align);
+        uint8_t *frameBuffer = (uint8_t *) av_malloc(frameSize);
+        av_image_fill_arrays(m_pSwsFrame->data, m_pSwsFrame->linesize, frameBuffer,
+                             AV_PIX_FMT_NV21, width, height, align);
+        //swsCtx初始化
+        m_pSwsCtx = sws_getContext(width, height, m_pAvCodecCtx->pix_fmt,
+                                   width, height, AV_PIX_FMT_NV21,
+                                   SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+    }
+    //图像格式转换->yuv420p/nv21/nv12-> data struct
+    int pixelScale = 0;
+    AVPixelFormat pixelFormat;
+    if (m_pAvCodecCtx->pix_fmt == AV_PIX_FMT_YUV420P ||
+        m_pAvCodecCtx->pix_fmt == AV_PIX_FMT_YUVJ420P) {
+        pixelFormat = AV_PIX_FMT_YUV420P;
+        if (frame->data[0] && frame->data[1] && !frame->data[2] &&
+            frame->linesize[0] == frame->linesize[1] && frame->linesize[2] == 0) {
+            //h264 mediacodec decoder is NV12/NV21 兼容某些设备可能出现的格式不匹配问题
+            pixelFormat = AV_PIX_FMT_NV21;
+        }
+    } else if (m_pAvCodecCtx->pix_fmt != AV_PIX_FMT_NV21) {
+        pixelFormat = AV_PIX_FMT_NV21;
+    } else if (m_pAvCodecCtx->pix_fmt != AV_PIX_FMT_NV12) {
+        pixelFormat = AV_PIX_FMT_NV12;
+    } else {
+        sws_scale(m_pSwsCtx,
+                  m_pAvFrame->data, m_pAvFrame->linesize, 0, m_pAvFrame->height,
+                  m_pSwsFrame->data, m_pSwsFrame->linesize);
+        pixelFormat = AV_PIX_FMT_NV21;
+        pixelScale = 1;
+    }
+    //数据处理(内存对齐/....etc.)
+    if (pixelScale) {
+        PixCharge(pixelFormat, width, height, m_pSwsFrame->linesize, m_pSwsFrame->data);
+    } else {
+        PixCharge(pixelFormat, width, height, m_pAvFrame->linesize, m_pAvFrame->data);
+    }
+    //视频回调
+    FFDecoderCall(width, height, pixel);
+}
+
+void FFDecoderCore::SwrConvert(AVFrame *frame) {
+    //音频回调
+    FFDecoderCall(pixel);
+}
+
+void FFDecoderCore::Synchronization() {
+    std::lock_guard<std::mutex> lock_syn(m_synMutex);
+}
+
+void FFDecoderCore::PixCharge(AVPixelFormat f, int w, int h, int *lines, uint8_t *data[8]) {
+    uint8_t *y = nullptr;
+    uint8_t *u = nullptr;
+    uint8_t *v = nullptr;
+//    int yuvSize = w * h * 3 / 2;
+    if (f == AV_PIX_FMT_YUV420P) {
+        y = new uint8_t[w * h];
+        u = new uint8_t[w * h / 4];
+        v = new uint8_t[w * h / 4];
+        if (w != lines[0]) {
+            int i = 0;
+            for (; i < h; i++) {
+                memcpy(y + w * i, data[0] + lines[0] * i, w);
+            }
+            i = 0;
+            for (; i < h / 2; i++) {
+                memcpy(u + w * i / 2, data[1] + lines[1] * i, w / 2);
+                memcpy(v + w * i / 2, data[2] + lines[2] * i, w / 2);
+            }
+        } else {
+            memcpy(y, data[0], lines[0]);
+            memcpy(u, data[1], lines[1] / 4);
+            memcpy(v, data[2], lines[2] / 4);
+        }
+    } else if (f == AV_PIX_FMT_NV21 || f == AV_PIX_FMT_NV12) {
+        y = new uint8_t[w * h];
+        u = new uint8_t[w * h / 2];
+        if (w != lines[0]) {
+            int i = 0;
+            for (; i < h; i++) {
+                memcpy(y + w * i, data[0] + lines[0] * i, w);
+            }
+            i = 0;
+            for (; i < h / 2; i++) {
+                memcpy(u + w * i, data[1] + lines[1] * i, w);
+            }
+        } else {
+            memcpy(y, data[0], lines[0]);
+            memcpy(u, data[1], lines[1] / 2);
+        }
+    }
+    pixel[0] = y;
+    pixel[1] = u;
+    pixel[2] = v;
 }
 }

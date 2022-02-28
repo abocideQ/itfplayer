@@ -7,9 +7,11 @@
 #ifdef PLATFORM_ANDROID
 
 extern "C" {
-#include "libavcodec/avcodec.h"
-#include "libavformat/avformat.h"
-#include "libswscale/swscale.h"
+#include "libavformat/avformat.h"//format
+#include "libavcodec/avcodec.h"//编解码
+#include "libswscale/swscale.h"//视频转换
+#include "libswresample/swresample.h"//音频采样
+#include "libavutil/imgutils.h"//图像工具
 };
 
 #elif PLATFORM_IOS

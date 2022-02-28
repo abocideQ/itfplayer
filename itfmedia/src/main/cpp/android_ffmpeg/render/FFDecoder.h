@@ -39,7 +39,9 @@ protected:
     //解码器运行时
     void Looping();
 
-    void FFDecoderRet();
+    void FFDecoderCall(int w, int h, uint8_t *data[8]);
+
+    void FFDecoderCall(uint8_t *data[8]);
 
 private:
     //自动开始

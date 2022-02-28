@@ -31,27 +31,36 @@ void FFDecoder::Pause() {
     if (m_pThread == nullptr) {
         return;
     }
+    if (m_state == STATE_STOP || m_state == STATE_UNKNOWN) {
+        return;
+    }
     m_request = REQUEST_PAUSE;
 }
 
 void FFDecoder::Stop() {
-    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    std::unique_lock<std::mutex> lock_request_state(m_stateMutex);
     if (m_pThread == nullptr) {
         return;
     }
     m_request = REQUEST_STOP;
-    m_pThread->join();
+    lock_request_state.unlock();
+    if (m_pThread->joinable()) {
+        m_pThread->join();
+    }
     delete m_pThread;
     m_pThread = nullptr;
 }
 
 void FFDecoder::Release() {
-    std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    std::unique_lock<std::mutex> lock_request_state(m_stateMutex);
     if (m_pThread == nullptr) {
         return;
     }
     m_request = REQUEST_STOP;
-    m_pThread->join();
+    lock_request_state.unlock();
+    if (m_pThread->joinable()) {
+        m_pThread->join();
+    }
     delete m_pThread;
     m_pThread = nullptr;
     FFDecoderCore::FFClose();
@@ -111,7 +120,11 @@ void FFDecoder::Looping() {
     }
 }
 
-void FFDecoder::FFDecoderRet() {
+void FFDecoder::FFDecoderCall(int w, int h, uint8_t *data[8]) {
+
+}
+
+void FFDecoder::FFDecoderCall(uint8_t *data[8]) {
 
 }
 

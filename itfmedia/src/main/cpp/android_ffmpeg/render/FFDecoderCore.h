@@ -16,21 +16,26 @@ protected:
     //解码
     int FFDecoder();
 
-    //解码回调
-    virtual void FFDecoderRet() = 0;
+    //视频回调
+    virtual void FFDecoderCall(int w, int h, uint8_t *data[8]) = 0;
+
+    //音频回调
+    virtual void FFDecoderCall(uint8_t *data[8]) = 0;
 
     //销毁
     void FFClose();
 
 private:
     //视频处理
-    void SwsScale();
+    void SwsScale(AVFrame *frame);
 
     //音频处理
-    void SwrConvert();
+    void SwrConvert(AVFrame *frame);
 
     //同步
     void Synchronization();
+
+    void PixCharge(AVPixelFormat f, int w, int h, int lines[8], uint8_t *data[8]);
 
     //媒体地址
     char *m_pUrl = nullptr;
@@ -43,15 +48,21 @@ private:
     //解码器
     AVCodec *m_pAvCodec = nullptr;
     //解码器上下文
-    AVCodecContext *m_pAvCodecContext = nullptr;
+    AVCodecContext *m_pAvCodecCtx = nullptr;
     //编码数据结构体
     AVPacket *m_pAvPack = nullptr;
     //解码数据结构体
     AVFrame *m_pAvFrame = nullptr;
-    //视频转换/音频采样
+    //视频转换
     SwsContext *m_pSwsCtx = nullptr;
+    AVFrame *m_pSwsFrame = nullptr;
+    //音频采样
+    SwrContext *m_pSwrCtx = nullptr;
+    AVFrame *m_pSwrFrame = nullptr;
     //同步锁
     std::mutex m_synMutex;
+    //pixel
+    uint8_t *pixel[8];
 };
 
 #endif //ITFPLAYER_FFDECODERCORE_H
