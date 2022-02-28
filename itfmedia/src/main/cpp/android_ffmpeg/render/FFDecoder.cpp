@@ -2,21 +2,24 @@
 
 extern "C" {
 void FFDecoder::SourceVideo(char *pUrl) {
-    Stop();
+    Release();
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     FFDecoderCore::FFOpen(pUrl, AVMEDIA_TYPE_VIDEO);
-    std::thread(&FFDecoder::Looping, this);
+    m_pThread = new std::thread(&FFDecoder::Looping, this);
 }
 
 void FFDecoder::SourceAudio(char *pUrl) {
-    Stop();
+    Release();
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
     FFDecoderCore::FFOpen(pUrl, AVMEDIA_TYPE_AUDIO);
-    std::thread(&FFDecoder::Looping, this);
+    m_pThread = new std::thread(&FFDecoder::Looping, this);
 }
 
 void FFDecoder::Resume() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    if (m_pThread == nullptr) {
+        return;
+    }
     if (m_state == STATE_STOP || m_state == STATE_UNKNOWN) {
         return;
     }
@@ -25,17 +28,32 @@ void FFDecoder::Resume() {
 
 void FFDecoder::Pause() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    if (m_pThread == nullptr) {
+        return;
+    }
     m_request = REQUEST_PAUSE;
 }
 
 void FFDecoder::Stop() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    if (m_pThread == nullptr) {
+        return;
+    }
     m_request = REQUEST_STOP;
+    m_pThread->join();
+    delete m_pThread;
+    m_pThread = nullptr;
 }
 
 void FFDecoder::Release() {
     std::lock_guard<std::mutex> lock_request_state(m_stateMutex);
+    if (m_pThread == nullptr) {
+        return;
+    }
     m_request = REQUEST_STOP;
+    m_pThread->join();
+    delete m_pThread;
+    m_pThread = nullptr;
     FFDecoderCore::FFClose();
 }
 
@@ -91,6 +109,10 @@ void FFDecoder::Looping() {
             return;
         }
     }
+}
+
+void FFDecoder::FFDecoderRet() {
+
 }
 
 int FFDecoder::State() {

@@ -39,6 +39,8 @@ protected:
     //解码器运行时
     void Looping();
 
+    void FFDecoderRet();
+
 private:
     //自动开始
     volatile bool m_auto = true;
@@ -50,6 +52,8 @@ private:
     std::mutex m_stateMutex;
     //循环锁,保证只存在单次循环
     std::mutex m_loopMutex;
+    //线程
+    std::thread *m_pThread;
 };
 
 

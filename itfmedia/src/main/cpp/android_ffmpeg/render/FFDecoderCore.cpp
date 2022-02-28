@@ -1,5 +1,6 @@
 #include "FFDecoderCore.h"
 
+extern "C" {
 int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     m_pUrl = pUrl;
     m_avMediaType = avMediaType;
@@ -126,11 +127,11 @@ int FFDecoderCore::FFDecoder() {
 }
 
 void FFDecoderCore::SwsScale() {
-
+    FFDecoderRet();
 }
 
 void FFDecoderCore::SwrConvert() {
-
+    FFDecoderRet();
 }
 
 void FFDecoderCore::Synchronization() {
@@ -183,4 +184,5 @@ int FFDecoderCore::FFInfoDump(char *pUrl) {
     //av_dump_format(m_pAvFtmCtx, 0, pUrl, 0);
     avformat_close_input(&ftmCtx);
     return 0;
+}
 }

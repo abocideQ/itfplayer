@@ -23,10 +23,13 @@ protected:
     void FFClose();
 
 private:
+    //视频处理
     void SwsScale();
 
+    //音频处理
     void SwrConvert();
 
+    //同步
     void Synchronization();
 
     //媒体地址
@@ -45,9 +48,8 @@ private:
     AVPacket *m_pAvPack = nullptr;
     //解码数据结构体
     AVFrame *m_pAvFrame = nullptr;
-    //图像转换工具
+    //视频转换/音频采样
     SwsContext *m_pSwsCtx = nullptr;
-    //音频采样工具
     //同步锁
     std::mutex m_synMutex;
 };
