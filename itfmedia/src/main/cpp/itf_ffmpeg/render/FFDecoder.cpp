@@ -57,6 +57,9 @@ void FFDecoder::Release() {
         return;
     }
     m_request = REQUEST_STOP;
+    m_pDecodeVideoListener = nullptr;
+    m_pDecodeAudioListener = nullptr;
+    m_pDecodeListenerCtx = nullptr;
     lock_request_state.unlock();
     if (m_pThread->joinable()) {
         m_pThread->join();
@@ -99,9 +102,9 @@ void FFDecoder::Looping() {
             lock_request_state.unlock();
             continue;
         } else if (m_state == STATE_RESUME) {//继续
-            int ret_ = FFDecoderCore::FFDecoder();
+            int ret_ = FFDecoderCore::FFDecode();
             if (ret_ == -1) {//解码停止
-                m_state = STATE_STOP;
+                m_state = STATE_ERR_DECODE;
             } else if (ret_ == 1) {//解码完成
                 m_state = STATE_COMPLETE;
             }
@@ -116,16 +119,33 @@ void FFDecoder::Looping() {
             return;
         } else if (m_state == STATE_UNKNOWN) {//未知
             return;
+        } else if (m_state == STATE_ERR_INIT || m_state == STATE_ERR_NET ||
+                   m_state == STATE_ERR_DECODE || m_state == STATE_ERR_OTHER) {//错误
+            return;
         }
     }
 }
 
-void FFDecoder::FFDecoderCall(int w, int h, uint8_t *data[8]) {
-
+void FFDecoder::FFDecodeVideoRet(int w, int h, uint8_t *data[8]) {
+    if (m_pDecodeListenerCtx != nullptr && m_pDecodeVideoListener != nullptr) {
+        m_pDecodeVideoListener(m_pDecodeListenerCtx, w, h, data);
+    }
 }
 
-void FFDecoder::FFDecoderCall(uint8_t *data[8]) {
+void FFDecoder::FFDecodeAudioRet(int size, uint8_t *data[8]) {
+    if (m_pDecodeListenerCtx != nullptr && m_pDecodeAudioListener != nullptr) {
+        m_pDecodeAudioListener(m_pDecodeListenerCtx, size, data);
+    }
+}
 
+void FFDecoder::SetDecodeVideoListener(void *ctx, DecodeVideoListener listener) {
+    m_pDecodeListenerCtx = ctx;
+    m_pDecodeVideoListener = listener;
+}
+
+void FFDecoder::SetDecodeAudioListener(void *ctx, DecodeAudioListener listener) {
+    m_pDecodeListenerCtx = ctx;
+    m_pDecodeAudioListener = listener;
 }
 
 int FFDecoder::State() {
@@ -141,6 +161,16 @@ int FFDecoder::State() {
         return 100;
     } else if (m_state == STATE_UNKNOWN) {
         return -100;
+    } else if (m_state == STATE_ERR_INIT) {
+        return -1;
+    } else if (m_state == STATE_ERR_NET) {
+        return -2;
+    } else if (m_state == STATE_ERR_DECODE) {
+        return -3;
+    } else if (m_state == STATE_ERR_OTHER) {
+        return -4;
+    } else {
+        return -10000;
     }
 }
 }

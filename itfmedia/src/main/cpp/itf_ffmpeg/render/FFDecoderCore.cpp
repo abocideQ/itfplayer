@@ -79,7 +79,7 @@ int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     return 0;
 }
 
-int FFDecoderCore::FFDecoder() {
+int FFDecoderCore::FFDecode() {
     //-1 stop, 0 continue, 1 complete
     int ret_;
     /* *
@@ -163,6 +163,13 @@ void FFDecoderCore::FFClose() {
     pixel[1] = nullptr;
     pixel[2] = nullptr;
     *pixel = nullptr;
+    //swr
+    if (m_pSwrFrame != nullptr) {
+        swr_free(m_pSwrCtx);
+        m_pSwrCtx = nullptr;
+        free(m_pSwrFrame);
+        m_pSwrFrameSize = 0;
+    }
 }
 
 int FFDecoderCore::FFInfoDump(char *pUrl) {
@@ -196,17 +203,19 @@ void FFDecoderCore::SwsScale(AVFrame *frame) {
          * 若align=1: 按实际的大小进行存储，不对齐,若解码时已经内存对齐则此处align=1无效
          * linesize: 行字节数
          * */
-        //转换后frame初始化
+        //转换用frame初始化
         m_pSwsFrame = av_frame_alloc();
-        //内存分配
+        //转换用frame内存分配
         int frameSize = av_image_get_buffer_size(AV_PIX_FMT_NV21, width, height, align);
         uint8_t *frameBuffer = (uint8_t *) av_malloc(frameSize);
         av_image_fill_arrays(m_pSwsFrame->data, m_pSwsFrame->linesize, frameBuffer,
                              AV_PIX_FMT_NV21, width, height, align);
+        //===========
         //swsCtx初始化
         m_pSwsCtx = sws_getContext(width, height, m_pAvCodecCtx->pix_fmt,
                                    width, height, AV_PIX_FMT_NV21,
                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+
     }
     //图像格式转换->yuv420p/nv21/nv12-> data struct
     int pixelScale = 0;
@@ -224,9 +233,9 @@ void FFDecoderCore::SwsScale(AVFrame *frame) {
     } else if (m_pAvCodecCtx->pix_fmt != AV_PIX_FMT_NV12) {
         pixelFormat = AV_PIX_FMT_NV12;
     } else {
-        sws_scale(m_pSwsCtx,
-                  m_pAvFrame->data, m_pAvFrame->linesize, 0, m_pAvFrame->height,
-                  m_pSwsFrame->data, m_pSwsFrame->linesize);
+        int ret_ = sws_scale(m_pSwsCtx,
+                             m_pAvFrame->data, m_pAvFrame->linesize, 0, m_pAvFrame->height,
+                             m_pSwsFrame->data, m_pSwsFrame->linesize);
         pixelFormat = AV_PIX_FMT_NV21;
         pixelScale = 1;
     }
@@ -237,12 +246,45 @@ void FFDecoderCore::SwsScale(AVFrame *frame) {
         PixCharge(pixelFormat, width, height, m_pAvFrame->linesize, m_pAvFrame->data);
     }
     //视频回调
-    FFDecoderCall(width, height, pixel);
+    FFDecodeVideoRet(width, height, pixel);
 }
 
 void FFDecoderCore::SwrConvert(AVFrame *frame) {
+    if (m_pSwrCtx == nullptr) {
+        int align = 1;
+        //swrCtx初始化
+        m_pSwrCtx = swr_alloc();
+        //入/出通道数
+        av_opt_set_int(m_pSwrCtx, "in_channel_layout", m_pAvCodecCtx->channel_layout, 0);
+        av_opt_set_int(m_pSwrCtx, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);//双声道立体声
+        //采样率
+        av_opt_set_int(m_pSwrCtx, "in_sample_rate", m_pAvCodecCtx->sample_rate, 0);
+        av_opt_set_int(m_pSwrCtx, "out_sample_rate", 44100, 0);//CD标准采样率
+        //格式 16位packed格式 1个缓存区: C1C2C1C2, 结尾带P为planar格式: 每个通道1个缓存区
+        av_opt_set_int(m_pSwrCtx, "in_sample_fmt", m_pAvCodecCtx->sample_fmt, 0);
+        av_opt_set_int(m_pSwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+        swr_init(m_pSwrCtx);
+        //=================
+
+        //转换用frame样本数计算 -> 将a个样本, 由c采样率 转换为 b采样率, nb_samples = a*b/c
+        int64_t delay = swr_get_delay(m_pSwrCtx, frame->nb_samples);           //上次没转换完的样本数
+        m_pSwrFrame_nb_samples = (int) av_rescale_rnd(1024 + delay,            //a每次转换的样本数
+                                                      44100,                   //b输出采样率
+                                                      frame->sample_rate,      //c输入采样率
+                                                      AV_ROUND_UP);            //向上取整
+        //转换用frame内存分配
+        int frameSize = av_samples_get_buffer_size(NULL,                   //lineSize
+                                                   m_pAvCodecCtx->channels,//channels
+                                                   m_pSwrFrame_nb_samples, //samples
+                                                   AV_SAMPLE_FMT_S16,      //fmt
+                                                   align);                 //align
+        m_pSwrFrame = (uint8_t *) malloc(frameSize);
+    }
+    int ret_ = swr_convert(m_pSwrCtx,
+                           &m_pSwrFrame, m_pSwrFrame_nb_samples,
+                           (const uint8_t **) frame->data, frame->nb_samples);
     //音频回调
-    FFDecoderCall(pixel);
+    FFDecodeAudioRet(0, pixel);
 }
 
 void FFDecoderCore::Synchronization() {

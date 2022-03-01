@@ -14,13 +14,13 @@ protected:
     int FFOpen(char *pUrl, AVMediaType avMediaType);
 
     //解码
-    int FFDecoder();
+    int FFDecode();
 
     //视频回调
-    virtual void FFDecoderCall(int w, int h, uint8_t *data[8]) = 0;
+    virtual void FFDecodeVideoRet(int w, int h, uint8_t *data[8]) = 0;
 
     //音频回调
-    virtual void FFDecoderCall(uint8_t *data[8]) = 0;
+    virtual void FFDecodeAudioRet(int size, uint8_t *data[8]) = 0;
 
     //销毁
     void FFClose();
@@ -58,7 +58,8 @@ private:
     AVFrame *m_pSwsFrame = nullptr;
     //音频采样
     SwrContext *m_pSwrCtx = nullptr;
-    AVFrame *m_pSwrFrame = nullptr;
+    uint8_t *m_pSwrFrame = nullptr;
+    uint8_t m_pSwrFrame_nb_samples = 0;
     //同步锁
     std::mutex m_synMutex;
     //pixel

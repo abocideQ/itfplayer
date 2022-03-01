@@ -15,10 +15,12 @@ void ItfDecoder::Source(char *pUrl) {
     if (m_pVideoDecoder == nullptr) {
         m_pVideoDecoder = new FFDecoder();
         m_pVideoDecoder->SourceVideo(pUrl);
+        m_pVideoDecoder->SetDecodeVideoListener(this, DecodeVideoListener);
     }
     if (m_pAudioDecoder == nullptr) {
         m_pAudioDecoder = new FFDecoder();
         m_pAudioDecoder->SourceAudio(pUrl);
+        m_pAudioDecoder->SetDecodeAudioListener(this, DecodeAudioListener);
     }
 }
 
@@ -70,5 +72,13 @@ int ItfDecoder::State() {
         return m_pAudioDecoder->State();
     }
     return -9999;
+}
+
+void ItfDecoder::DecodeVideoListener(void *ctx, int w, int h, uint8_t *data[8]) {
+//    ItfDecoder *pItf = static_cast<ItfDecoder *>(ctx);
+}
+
+void ItfDecoder::DecodeAudioListener(void *ctx, int size, uint8_t *data[8]) {
+//    ItfDecoder *pItf = static_cast<ItfDecoder *>(ctx);
 }
 }

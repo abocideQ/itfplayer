@@ -9,7 +9,11 @@ enum CodecState {
     STATE_RESUME,
     STATE_PAUSE,
     STATE_STOP,
-    STATE_COMPLETE
+    STATE_COMPLETE,
+    STATE_ERR_INIT,
+    STATE_ERR_NET,
+    STATE_ERR_DECODE,
+    STATE_ERR_OTHER
 };
 
 enum CodecRequest {
@@ -18,6 +22,10 @@ enum CodecRequest {
     REQUEST_PAUSE,
     REQUEST_STOP
 };
+
+typedef void (*DecodeVideoListener)(void *ctx, int w, int h, uint8_t **);
+
+typedef void (*DecodeAudioListener)(void *ctx, int size, uint8_t **);
 
 class FFDecoder : public FFDecoderCore {
 public:
@@ -35,13 +43,23 @@ public:
 
     int State();
 
+    void SetDecodeVideoListener(void *ctx, DecodeVideoListener listener);
+
+    void SetDecodeAudioListener(void *ctx, DecodeAudioListener listener);
+
 protected:
     //解码器运行时
     void Looping();
 
-    void FFDecoderCall(int w, int h, uint8_t *data[8]);
+    void FFDecodeVideoRet(int w, int h, uint8_t *data[8]);
 
-    void FFDecoderCall(uint8_t *data[8]);
+    void FFDecodeAudioRet(int size, uint8_t *data[8]);
+
+    void *m_pDecodeListenerCtx = nullptr;
+
+    DecodeVideoListener m_pDecodeVideoListener = nullptr;
+
+    DecodeAudioListener m_pDecodeAudioListener = nullptr;
 
 private:
     //自动开始
