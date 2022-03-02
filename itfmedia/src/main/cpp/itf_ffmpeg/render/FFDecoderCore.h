@@ -13,7 +13,7 @@ static long long SystemCurrentMilli() {
 class FFDecoderCore {
 public:
     //媒体信息
-    int FFInfoDump(char *pUrl);
+//    int FFInfoDump(char *pUrl);
 
 protected:
     //初始化
@@ -27,6 +27,12 @@ protected:
 
     //音频回调
     virtual void FFDecodeAudioRet(int size, uint8_t *data[8]) = 0;
+
+    int64_t FFDuration();
+
+    int64_t FFPosition();
+
+    int FFPosition(float seek2);
 
     //销毁
     void FFClose();
@@ -51,10 +57,12 @@ private:
     AVFormatContext *m_pAvFtmCtx = nullptr;
     //音视频流索引
     int m_avStreamIndex = 0;
-    //音频播放开始时间
+    //视频从0s开始播放的时间戳(当前时间戳 - 当前流时间)
     int64_t m_avStartMilli = -1;
-    //SeekPosition
-    volatile float m_avSeekPosition = 0;
+    //当前播放进度
+    int64_t m_avCurrentStamp = -1;
+    //seek_percent
+    volatile float m_avSeekPercent = 0;
 
     //解码器
     AVCodec *m_pAvCodec = nullptr;

@@ -1,6 +1,5 @@
 #include "FFDecoderCore.h"
 
-typedef lock_syn syn;
 extern "C" {
 int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     m_pUrl = pUrl;
@@ -81,6 +80,20 @@ int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
 }
 
 int FFDecoderCore::FFDecode() {
+    if (m_avSeekPercent > 0) {
+        auto seek_target = static_cast<int64_t>(m_avSeekPercent * 1000 * 1000);//微秒
+        int64_t seek_min = INT64_MIN;
+        int64_t seek_max = INT64_MAX;
+        int64_t index = m_avStreamIndex;
+        int seek_ret = avformat_seek_file(m_pAvFtmCtx, index, seek_min, seek_target, seek_max, 0);
+        if (seek_ret >= 0) {
+            m_avSeekPercent = -1;
+            avcodec_flush_buffers(m_pAvCodecCtx);
+        } else {
+            m_avSeekPercent = 0;
+            return -1;
+        }
+    }
     //-1 stop, 0 continue, 1 complete
     int ret_;
     /* *
@@ -125,6 +138,28 @@ int FFDecoderCore::FFDecode() {
         av_packet_unref(m_pAvPack);
     }
     return 0;
+}
+
+int64_t FFDecoderCore::FFDuration() {
+    if (m_pAvFtmCtx == nullptr) {
+        return 0;
+    }
+    return m_pAvFtmCtx->duration / AV_TIME_BASE * 1000;//微秒->毫秒
+}
+
+int64_t FFDecoderCore::FFPosition() {
+    if (m_pAvCodecCtx == nullptr) {
+        return 0;
+    }
+    return m_avCurrentStamp;
+}
+
+int FFDecoderCore::FFPosition(float percent) {
+    if (m_pAvCodecCtx == nullptr) {
+        return -1;
+    }
+    m_avSeekPercent = percent;
+    return 1;
 }
 
 void FFDecoderCore::FFClose() {
@@ -174,7 +209,7 @@ void FFDecoderCore::FFClose() {
     }
 }
 
-int FFDecoderCore::FFInfoDump(char *pUrl) {
+/*int FFDecoderCore::FFInfoDump(char *pUrl) {
     AVFormatContext *ftmCtx = avformat_alloc_context();
     int ret_;
     ret_ = avformat_open_input(&ftmCtx, pUrl, nullptr, nullptr);
@@ -191,7 +226,7 @@ int FFDecoderCore::FFInfoDump(char *pUrl) {
     //av_dump_format(m_pAvFtmCtx, 0, pUrl, 0);
     avformat_close_input(&ftmCtx);
     return 0;
-}
+}*/
 
 void FFDecoderCore::SwsScale(AVFrame *frame) {
     int width = m_pAvCodecCtx->width;
@@ -209,7 +244,7 @@ void FFDecoderCore::SwsScale(AVFrame *frame) {
         m_pSwsFrame = av_frame_alloc();
         //转换用frame内存分配
         int frameSize = av_image_get_buffer_size(AV_PIX_FMT_NV21, width, height, align);
-        uint8_t *frameBuffer = (uint8_t *) av_malloc(frameSize);
+        auto *frameBuffer = (uint8_t *) av_malloc(frameSize);
         av_image_fill_arrays(m_pSwsFrame->data, m_pSwsFrame->linesize, frameBuffer,
                              AV_PIX_FMT_NV21, width, height, align);
         //===========
@@ -238,6 +273,9 @@ void FFDecoderCore::SwsScale(AVFrame *frame) {
         int ret_ = sws_scale(m_pSwsCtx,
                              m_pAvFrame->data, m_pAvFrame->linesize, 0, m_pAvFrame->height,
                              m_pSwsFrame->data, m_pSwsFrame->linesize);
+        if (ret_ < 0) {
+
+        }
         pixelFormat = AV_PIX_FMT_NV21;
         pixelScale = 1;
     }
@@ -284,6 +322,9 @@ void FFDecoderCore::SwrConvert(AVFrame *frame) {
     int ret_ = swr_convert(m_pSwrCtx,
                            &m_pSwrFrame, m_pSwrFrame_nb_samples,
                            (const uint8_t **) frame->data, frame->nb_samples);
+    if (ret_ < 0) {
+
+    }
     //音频回调
     FFDecodeAudioRet(m_pSwrFrame_size, pixel);
 }
@@ -304,20 +345,21 @@ void FFDecoderCore::Synchronization(AVFrame *frame) {
     int64_t t_frame_second =
             t_frame_dts * (av_q2d(m_pAvFtmCtx->streams[m_avStreamIndex]->time_base));
     //当前音/视频流的毫秒数 second*1000, 用以与时间戳对比(时间戳为毫秒表现)
-    int64_t t_frame_stamp = t_frame_second * 1000;
+    m_avCurrentStamp = t_frame_second * 1000;
+    //获取视频从0s开始播放的时间戳(当前时间戳 - 当前流时间)
     if (m_avStartMilli == -1) {
         m_avStartMilli = SystemCurrentMilli();
-    } else if (m_avSeekPosition > 0) {
-        m_avSeekPosition = 0;
-        m_avStartMilli = SystemCurrentMilli() - t_frame_stamp;
+    } else if (m_avSeekPercent > 0) {
+        m_avSeekPercent = 0;
+        m_avStartMilli = SystemCurrentMilli() - m_avCurrentStamp;
     }
     //===============
     //获取时钟流逝时间(视频0s ~ 当前时间)
     int64_t t_sys_past_stamp = SystemCurrentMilli() - m_avStartMilli;
     //===============
     //时钟同步(若 当前流时间 > 时钟流逝时间 则等待同步, 正常情况为 当前流时间=时钟流逝时间)
-    if (t_frame_stamp > t_sys_past_stamp) {
-        int64_t t_sleep_stamp = static_cast<unsigned int>(t_frame_stamp - t_sys_past_stamp);//休眠时间ms
+    if (m_avCurrentStamp > t_sys_past_stamp) {
+        int64_t t_sleep_stamp = static_cast<unsigned int>(m_avCurrentStamp - t_sys_past_stamp);
         t_sleep_stamp = t_sleep_stamp > 100 ? 100 : t_sleep_stamp; //限制休眠时间不能过长
         av_usleep(t_sleep_stamp * 1000);//参数为 微秒=毫秒*1000
     }
