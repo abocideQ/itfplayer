@@ -2,7 +2,7 @@
 
 extern "C" {
 void native_itf_source(JNIEnv *env, jobject *obj, jstring url) {
-    char *p = (char *) env->GetStringUTFChars(url, 0);
+    char *p = (char *) env->GetStringUTFChars(url, nullptr);
 }
 
 //jni auto register
@@ -14,7 +14,7 @@ JNINativeMethod JNI_Methods[] = {
 };
 #define JNI_LENGTH(n) (sizeof(n) / sizeof(n[0]))
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
-    JNIEnv *env = NULL;
+    JNIEnv *env = nullptr;
     if (vm->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK) {
         return JNI_ERR;
     }
