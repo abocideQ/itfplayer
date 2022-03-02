@@ -148,6 +148,7 @@ int64_t FFDecoderCore::FFDuration() {
 }
 
 int64_t FFDecoderCore::FFPosition() {
+    std::lock_guard<std::mutex> lock_syn(m_synMutex);
     if (m_pAvCodecCtx == nullptr) {
         return 0;
     }
@@ -155,6 +156,7 @@ int64_t FFDecoderCore::FFPosition() {
 }
 
 int FFDecoderCore::FFPosition(float percent) {
+    std::lock_guard<std::mutex> lock_syn(m_synMutex);
     if (m_pAvCodecCtx == nullptr) {
         return -1;
     }
