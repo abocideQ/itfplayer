@@ -23,11 +23,11 @@ public:
 
     int64_t Duration();
 
+private:
     static void DecodeVideoListener(void *ctx, int w, int h, uint8_t *data[8]);
 
     static void DecodeAudioListener(void *ctx, int size, uint8_t *data[8]);
 
-private:
     //VideoDecoder
     FFDecoder *m_pVideoDecoder;
     //AudioDecoder

@@ -174,7 +174,7 @@ int FFDecoder::State() {
     }
 }
 
-void FFDecoder::Seek2Percent(float percent) {
+int FFDecoder::Seek2Percent(float percent) {
     return FFDecoderCore::FFPosition(percent);
 }
 
