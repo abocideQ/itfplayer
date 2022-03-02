@@ -14,7 +14,9 @@ extern "C" {
 #include "libavutil/imgutils.h"//图像工具
 
 #include "libswresample/swresample.h"//音频重采样
-#include <libavutil/opt.h>//音频工具
+#include "libavutil/opt.h"//音频工具
+
+#include "libavutil/time.h"//时间工具
 };
 
 #elif PLATFORM_IOS

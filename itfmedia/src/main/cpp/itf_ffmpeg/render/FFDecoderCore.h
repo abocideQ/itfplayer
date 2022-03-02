@@ -4,6 +4,12 @@
 #include "utils/header_common.h"
 #include "utils/header_ffmpeg.h"
 
+static long long SystemCurrentMilli() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((long long) (tv.tv_sec)) * 1000 + tv.tv_usec / 1000;
+}
+
 class FFDecoderCore {
 public:
     //媒体信息
@@ -33,7 +39,7 @@ private:
     void SwrConvert(AVFrame *frame);
 
     //同步
-    void Synchronization();
+    void Synchronization(AVFrame *frame);
 
     void PixCharge(AVPixelFormat f, int w, int h, int lines[8], uint8_t *data[8]);
 
@@ -45,6 +51,11 @@ private:
     AVFormatContext *m_pAvFtmCtx = nullptr;
     //音视频流索引
     int m_avStreamIndex = 0;
+    //音频播放开始时间
+    int64_t m_avStartMilli = -1;
+    //SeekPosition
+    volatile float m_avSeekPosition = 0;
+
     //解码器
     AVCodec *m_pAvCodec = nullptr;
     //解码器上下文
@@ -60,6 +71,7 @@ private:
     SwrContext *m_pSwrCtx = nullptr;
     uint8_t *m_pSwrFrame = nullptr;
     uint8_t m_pSwrFrame_nb_samples = 0;
+    uint8_t m_pSwrFrame_size = 0;
     //同步锁
     std::mutex m_synMutex;
     //pixel

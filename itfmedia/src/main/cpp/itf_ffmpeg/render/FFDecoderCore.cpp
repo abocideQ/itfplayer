@@ -1,5 +1,6 @@
 #include "FFDecoderCore.h"
 
+typedef lock_syn syn;
 extern "C" {
 int FFDecoderCore::FFOpen(char *pUrl, AVMediaType avMediaType) {
     m_pUrl = pUrl;
@@ -108,15 +109,15 @@ int FFDecoderCore::FFDecode() {
      * */
     int nb_frame = 0;
     while (avcodec_receive_frame(m_pAvCodecCtx, m_pAvFrame) == 0) {
+        {//时钟同步
+            Synchronization(m_pAvFrame);
+        }
         {//音频/视频数据处理
             if (m_avMediaType == AVMEDIA_TYPE_VIDEO) {
                 SwsScale(m_pAvFrame);
             } else if (m_avMediaType == AVMEDIA_TYPE_AUDIO) {
                 SwrConvert(m_pAvFrame);
             }
-        }
-        {//时钟同步
-            Synchronization();
         }
         nb_frame++;
     }
@@ -165,10 +166,11 @@ void FFDecoderCore::FFClose() {
     *pixel = nullptr;
     //swr
     if (m_pSwrFrame != nullptr) {
-        swr_free(m_pSwrCtx);
+        swr_free(&m_pSwrCtx);
         m_pSwrCtx = nullptr;
         free(m_pSwrFrame);
-        m_pSwrFrameSize = 0;
+        m_pSwrFrame_nb_samples = 0;
+        m_pSwrFrame_size = 0;
     }
 }
 
@@ -265,7 +267,6 @@ void FFDecoderCore::SwrConvert(AVFrame *frame) {
         av_opt_set_int(m_pSwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
         swr_init(m_pSwrCtx);
         //=================
-
         //转换用frame样本数计算 -> 将a个样本, 由c采样率 转换为 b采样率, nb_samples = a*b/c
         int64_t delay = swr_get_delay(m_pSwrCtx, frame->nb_samples);           //上次没转换完的样本数
         m_pSwrFrame_nb_samples = (int) av_rescale_rnd(1024 + delay,            //a每次转换的样本数
@@ -273,22 +274,53 @@ void FFDecoderCore::SwrConvert(AVFrame *frame) {
                                                       frame->sample_rate,      //c输入采样率
                                                       AV_ROUND_UP);            //向上取整
         //转换用frame内存分配
-        int frameSize = av_samples_get_buffer_size(NULL,                   //lineSize
-                                                   m_pAvCodecCtx->channels,//channels
-                                                   m_pSwrFrame_nb_samples, //samples
-                                                   AV_SAMPLE_FMT_S16,      //fmt
-                                                   align);                 //align
-        m_pSwrFrame = (uint8_t *) malloc(frameSize);
+        m_pSwrFrame_size = av_samples_get_buffer_size(nullptr,        //lineSize
+                                                      m_pAvCodecCtx->channels,//channels
+                                                      m_pSwrFrame_nb_samples, //samples
+                                                      AV_SAMPLE_FMT_S16,//fmt
+                                                      align);                 //align
+        m_pSwrFrame = (uint8_t *) malloc(m_pSwrFrame_size);
     }
     int ret_ = swr_convert(m_pSwrCtx,
                            &m_pSwrFrame, m_pSwrFrame_nb_samples,
                            (const uint8_t **) frame->data, frame->nb_samples);
     //音频回调
-    FFDecodeAudioRet(0, pixel);
+    FFDecodeAudioRet(m_pSwrFrame_size, pixel);
 }
 
-void FFDecoderCore::Synchronization() {
+void FFDecoderCore::Synchronization(AVFrame *frame) {
     std::lock_guard<std::mutex> lock_syn(m_synMutex);
+    //===============
+    //更新pts/dts时间戳
+    int64_t t_frame_dts;
+    if (frame->pkt_dts != AV_NOPTS_VALUE) {
+        t_frame_dts = frame->pkt_dts;
+    } else if (frame->pts != AV_NOPTS_VALUE) {
+        t_frame_dts = frame->pts;
+    } else {
+        t_frame_dts = 0;
+    }
+    //当前音/视频流的秒数 = pts/dts * 时间基
+    int64_t t_frame_second =
+            t_frame_dts * (av_q2d(m_pAvFtmCtx->streams[m_avStreamIndex]->time_base));
+    //当前音/视频流的毫秒数 second*1000, 用以与时间戳对比(时间戳为毫秒表现)
+    int64_t t_frame_stamp = t_frame_second * 1000;
+    if (m_avStartMilli == -1) {
+        m_avStartMilli = SystemCurrentMilli();
+    } else if (m_avSeekPosition > 0) {
+        m_avSeekPosition = 0;
+        m_avStartMilli = SystemCurrentMilli() - t_frame_stamp;
+    }
+    //===============
+    //获取时钟流逝时间(视频0s ~ 当前时间)
+    int64_t t_sys_past_stamp = SystemCurrentMilli() - m_avStartMilli;
+    //===============
+    //时钟同步(若 当前流时间 > 时钟流逝时间 则等待同步, 正常情况为 当前流时间=时钟流逝时间)
+    if (t_frame_stamp > t_sys_past_stamp) {
+        int64_t t_sleep_stamp = static_cast<unsigned int>(t_frame_stamp - t_sys_past_stamp);//休眠时间ms
+        t_sleep_stamp = t_sleep_stamp > 100 ? 100 : t_sleep_stamp; //限制休眠时间不能过长
+        av_usleep(t_sleep_stamp * 1000);//参数为 微秒=毫秒*1000
+    }
 }
 
 void FFDecoderCore::PixCharge(AVPixelFormat f, int w, int h, int *lines, uint8_t *data[8]) {
