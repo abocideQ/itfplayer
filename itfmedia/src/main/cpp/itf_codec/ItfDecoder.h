@@ -17,6 +17,12 @@ public:
 
     int State();
 
+    int SeekTo(float percent);
+
+    int64_t Position();
+
+    int64_t Duration();
+
     static void DecodeVideoListener(void *ctx, int w, int h, uint8_t *data[8]);
 
     static void DecodeAudioListener(void *ctx, int size, uint8_t *data[8]);

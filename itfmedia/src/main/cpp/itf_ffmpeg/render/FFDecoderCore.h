@@ -32,7 +32,7 @@ protected:
 
     int64_t FFPosition();
 
-    int FFPosition(float seek2);
+    int FFPosition(float percent);
 
     //销毁
     void FFClose();

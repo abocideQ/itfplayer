@@ -43,6 +43,12 @@ public:
 
     int State();
 
+    int Seek2Percent(float percent);
+
+    int64_t Position();
+
+    int64_t Duration();
+
     void SetDecodeVideoListener(void *ctx, DecodeVideoListener listener);
 
     void SetDecodeAudioListener(void *ctx, DecodeAudioListener listener);

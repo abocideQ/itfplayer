@@ -74,6 +74,27 @@ int ItfDecoder::State() {
     return -9999;
 }
 
+int ItfDecoder::SeekTo(float percent) {
+    if (m_pVideoDecoder != nullptr) {
+        return m_pVideoDecoder->Seek2Percent(percent);
+    }
+    return -1;
+}
+
+int64_t ItfDecoder::Position() {
+    if (m_pVideoDecoder != nullptr) {
+        return m_pVideoDecoder->Position();
+    }
+    return 0;
+}
+
+int64_t ItfDecoder::Duration() {
+    if (m_pVideoDecoder != nullptr) {
+        return m_pVideoDecoder->Duration();
+    }
+    return 0;
+}
+
 void ItfDecoder::DecodeVideoListener(void *ctx, int w, int h, uint8_t *data[8]) {
 //    ItfDecoder *pItf = static_cast<ItfDecoder *>(ctx);
 }
