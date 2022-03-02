@@ -87,10 +87,8 @@ int FFDecoderCore::FFDecode() {
         int64_t index = m_avStreamIndex;
         int seek_ret = avformat_seek_file(m_pAvFtmCtx, index, seek_min, seek_target, seek_max, 0);
         if (seek_ret >= 0) {
-            m_avSeekPercent = -1;
             avcodec_flush_buffers(m_pAvCodecCtx);
         } else {
-            m_avSeekPercent = 0;
             return -1;
         }
     }
@@ -174,6 +172,9 @@ void FFDecoderCore::FFClose() {
         m_pAvFtmCtx = nullptr;
     }
     m_avStreamIndex = 0;
+    m_avStartMilli = -1;
+    m_avCurrentStamp = -1;
+    m_avSeekPercent = 0;
     if (m_pAvCodecCtx != nullptr) {
         avcodec_close(m_pAvCodecCtx);
         avcodec_free_context(&m_pAvCodecCtx);
